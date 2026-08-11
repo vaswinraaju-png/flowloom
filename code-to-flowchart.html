@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flowloom: Code to Flowchart</title>
+<style>
+  :root{
+    --bg:#fafafa; --panel:#ffffff; --border:#e3e4e7; --border-strong:#c7c9ce;
+    --text:#1f2430; --text-secondary:#6b7078; --accent:#2f6feb; --accent-light:#eef3fe;
+    --card-bg:#f3f4f6; --card-border:#e5e6e9;
+    --start:#ffffff; --start-b:#c7c9ce; --start-t:#1f2430;
+    --decision:#ffffff; --decision-b:#c7c9ce; --decision-t:#1f2430;
+    --proc:#ffffff; --proc-b:#c7c9ce; --proc-t:#1f2430;
+    --end:#ffffff; --end-b:#c7c9ce; --end-t:#1f2430;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  header{background:var(--panel);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  header h1{font-size:15px;font-weight:600;margin:0 16px 0 0;white-space:nowrap;color:var(--text);}
+  header h1 span{color:var(--accent);}
+  .btn{background:var(--panel);border:1px solid var(--border-strong);border-radius:6px;padding:7px 12px;font-size:13px;cursor:pointer;color:var(--text);}
+  .btn:hover{background:var(--accent-light);border-color:var(--accent);}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.primary:hover{opacity:.9;}
+  .spacer{flex:1;}
+
+  #main{flex:1;display:flex;min-height:0;}
+  #sidebar{width:340px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:12px;gap:8px;}
+  #sidebar h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);margin:4px 0;}
+  textarea{width:100%;flex:1;min-height:220px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;padding:10px;border:1px solid var(--border);border-radius:6px;background:#fafbfc;color:var(--text);}
+  .row{display:flex;gap:8px;}
+  .row .btn{flex:1;}
+  .hint{font-size:11.5px;color:var(--text-secondary);line-height:1.5;}
+
+  #canvas-wrap{flex:1;position:relative;overflow:auto;background:
+    linear-gradient(var(--border) 1px, transparent 1px) 0 0/24px 24px,
+    linear-gradient(90deg, var(--border) 1px, transparent 1px) 0 0/24px 24px,
+    var(--bg);
+  }
+  #canvas{position:relative;width:8000px;height:2600px;}
+  svg#connectors{position:absolute;top:0;left:0;pointer-events:none;}
+
+  .node{position:absolute;min-width:120px;max-width:240px;padding:9px 14px;border-radius:6px;border:1.3px solid; font-size:12.5px;line-height:1.4;cursor:grab;user-select:none;box-shadow:0 1px 2px rgba(0,0,0,.04);word-wrap:break-word;text-align:center;background:#fff;}
+  .node:active{cursor:grabbing;}
+  .node.selected{outline:2px solid var(--accent);outline-offset:2px;}
+  .node.start,.node.end{border-radius:16px;font-weight:500;}
+  .node.start{border-left:3px solid #2fa35a;}
+  .node.end{border-left:3px solid #d64545;}
+  .node.decision{border-left:3px solid #d99425;}
+  .node.process{border-left:3px solid var(--accent);}
+  .node .editable{outline:none;}
+  .node .del{position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:#fff;border:1px solid var(--border-strong);font-size:11px;line-height:16px;text-align:center;cursor:pointer;display:none;}
+  .node:hover .del{display:block;}
+
+  .card{position:absolute;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;pointer-events:none;}
+  .card .card-title{position:absolute;top:-11px;left:16px;background:var(--bg);padding:0 8px;font-size:11.5px;color:var(--text-secondary);font-weight:600;letter-spacing:.02em;}
+
+  #status{padding:6px 16px;font-size:11.5px;color:var(--text-secondary);background:var(--panel);border-top:1px solid var(--border);}
+  #explainPanel{width:300px;background:var(--panel);border-left:1px solid var(--border);padding:16px;overflow-y:auto;}
+  #explainPanel h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);margin:4px 0 10px;}
+  #explainBody{font-size:13px;line-height:1.6;color:var(--text);}
+  #explainBody p{margin:0 0 10px;}
+  #explainBody b{color:var(--text);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Flow<span>loom</span></h1>
+    <button class="btn" id="addNode">+ Node</button>
+    <button class="btn" id="autoLayout">Auto layout</button>
+    <button class="btn" id="saveBtn">Save</button>
+    <button class="btn" id="clearBtn">Clear</button>
+    <div class="spacer"></div>
+    <button class="btn" id="exportPngBtn">Download PNG</button>
+    <button class="btn primary" id="exportBtn">Export .drawio</button>
+  </header>
+  <div id="main">
+    <div id="sidebar">
+      <h3>Paste code</h3>
+      <textarea id="codeInput" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="btn primary" id="parseBtn">Parse to flowchart</button>
+      </div>
+      <p class="hint">Detects sequential guard clauses: <code>if (cond) return X;</code> chains, plain <code>if/else</code>, and function boundaries. Put a line with <code>--x--</code> between two code blocks to render them as separate, side-by-side flowcharts. Drag nodes on the canvas to rearrange. Double-click any node to edit its text. Manual edits are preserved on export.</p>
+    </div>
+    <div id="canvas-wrap">
+      <div id="canvas">
+        <svg id="connectors"></svg>
+      </div>
+    </div>
+    <div id="explainPanel">
+      <h3>Explanation</h3>
+      <div id="explainBody" class="hint">Parse some code to see a plain-English walkthrough here.</div>
+    </div>
+  </div>
+  <div id="status">Ready</div>
+</div>
+
+<script>
+const sample = `function checkBlocked(user) {
+  if (user.applyCapHit) return "trigger_8_apply_cap";
+  if (user.creditsBelow5) return "trigger_10_low_credits";
+  return null;
+}
+--x--
+function checkEligible(user) {
+  if (user.isVerified) return "trigger_1_verified";
+  return "trigger_0_unverified";
+}`;
+document.getElementById('codeInput').value = sample;
+
+let nodes = [];
+let edges = [];
+let groups = []; // {title, rootId}
+let idCounter = 1;
+let selectedId = null;
+
+function uid(){ return 'n' + (idCounter++); }
+
+function newNode(type, text, x, y){
+  return { id: uid(), type, text, x, y, w: 180, h: 60 };
+}
+
+// ---------- Parser: builds a tree (each decision has yes/no children) ----------
+function parseCode(fullCode){
+  nodes = []; edges = []; groups = [];
+  idCounter = 1;
+
+  const blocks = fullCode.split(/^\s*--x--\s*$/m).map(b=>b.trim()).filter(b=>b.length>0);
+  let groupOffsetX = 0;
+  const roots = [];
+  blocks.forEach((code, gi)=>{
+    const { rootId, width } = parseBlock(code);
+    roots.push({rootId, offsetX: groupOffsetX});
+    const rootNode = nodes.find(n=>n.id===rootId);
+    groups.push({ title: rootNode ? rootNode.text : ('Diagram ' + (gi+1)), rootId });
+    groupOffsetX += width + 220;
+  });
+
+  treeLayout(roots);
+  render();
+  renderExplanation(blocks);
+  setStatus(`Parsed ${blocks.length} diagram${blocks.length>1?'s':''}, ${nodes.length} nodes, ${edges.length} connectors.`);
+}
+
+// ---------- Plain-English explanation (rule-based, no AI) ----------
+function renderExplanation(blocks){
+  const el = document.getElementById('explainBody');
+  if (!blocks || blocks.length === 0){ el.innerHTML = 'Parse some code to see a plain-English walkthrough here.'; return; }
+  let html = '';
+  blocks.forEach(code=>{
+    const funcMatch = code.match(/function\s+(\w+)\s*\(([^)]*)\)/);
+    const name = funcMatch ? funcMatch[1] : 'This function';
+    const conditions = [...code.matchAll(/if\s*\((.+?)\)\s*return\s+(.+?);/g)];
+    const finalReturn = code.match(/return\s+(.+?);\s*\}\s*$/);
+    html += `<p><b>${escapeHtml(name)}</b> checks ${conditions.length} condition${conditions.length===1?'':'s'} in order, top to bottom. As soon as one matches, it returns immediately and skips the rest.</p>`;
+    if (conditions.length){
+      html += '<p>';
+      conditions.forEach((m,i)=>{
+        html += `${i+1}. If <b>${escapeHtml(m[1].trim())}</b> is true, it returns ${escapeHtml(m[2].trim())}.<br>`;
+      });
+      html += '</p>';
+    }
+    if (finalReturn){
+      html += `<p>If none of the conditions match, it falls through to the default: returns ${escapeHtml(finalReturn[1].trim())}.</p>`;
+    }
+  });
+  el.innerHTML = html;
+}
+
+function parseBlock(code){
+  const funcMatch = code.match(/function\s+(\w+)\s*\(([^)]*)\)/);
+  let startLabel = funcMatch ? (funcMatch[1] + '(' + funcMatch[2].trim() + ')') : 'start';
+
+  const start = newNode('start', startLabel, 0, 0);
+  nodes.push(start);
+
+  let body = code;
+  const braceStart = code.indexOf('{');
+  const braceEnd = code.lastIndexOf('}');
+  if (braceStart !== -1 && braceEnd !== -1 && braceEnd > braceStart){
+    body = code.slice(braceStart+1, braceEnd);
+  }
+  const lines = body.split('\n').map(l=>l.trim()).filter(l=>l.length>0 && l!=='}');
+
+  const ifReturnRe = /^if\s*\((.+?)\)\s*return\s+(.+?);?$/;
+  const returnRe = /^return\s+(.+?);?$/;
+  const ifOnlyRe = /^if\s*\((.+?)\)\s*\{?$/;
+
+  // Build a chain where each guard-clause decision branches:
+  //   Yes -> its own return (leaf)
+  //   No  -> next node in the chain (built recursively)
+  let prevId = start.id;
+  for (let i=0;i<lines.length;i++){
+    const line = lines[i];
+    let m;
+    if ((m = line.match(ifReturnRe))){
+      const dec = newNode('decision', m[1].trim(), 0, 0);
+      nodes.push(dec);
+      edges.push({from: prevId, to: dec.id, label:''});
+      const yesEnd = newNode('end', 'return ' + m[2].trim(), 0, 0);
+      nodes.push(yesEnd);
+      edges.push({from: dec.id, to: yesEnd.id, label:'Yes'});
+      prevId = dec.id; // "No" branch keeps going down the chain
+      dec._noPending = true;
+      continue;
+    }
+    if ((m = line.match(returnRe))){
+      const endN = newNode('end', 'return ' + m[1].trim(), 0, 0);
+      nodes.push(endN);
+      const prevNode = nodes.find(n=>n.id===prevId);
+      edges.push({from: prevId, to: endN.id, label: prevNode && prevNode.type==='decision' ? 'No' : ''});
+      prevId = endN.id;
+      continue;
+    }
+    if ((m = line.match(ifOnlyRe))){
+      const dec = newNode('decision', m[1].trim(), 0, 0);
+      nodes.push(dec);
+      edges.push({from: prevId, to: dec.id, label:''});
+      prevId = dec.id;
+      continue;
+    }
+    const proc = newNode('process', line.replace(/;$/,''), 0, 0);
+    nodes.push(proc);
+    const prevNode = nodes.find(n=>n.id===prevId);
+    edges.push({from: prevId, to: proc.id, label: prevNode && prevNode.type==='decision' ? 'No' : ''});
+    prevId = proc.id;
+  }
+
+  if (nodes[nodes.length-1].type !== 'end'){
+    const endN = newNode('end', 'end', 0, 0);
+    const prevNode = nodes.find(n=>n.id===prevId);
+    edges.push({from: prevId, to: endN.id, label: prevNode && prevNode.type==='decision' ? 'No' : ''});
+    nodes.push(endN);
+  }
+
+  // measure this block's width in "slots" for placement before global layout
+  const NODE_W = 220, H_GAP = 70;
+  const childrenOf = (id) => edges.filter(e=>e.from===id).map(e=>({node: nodes.find(n=>n.id===e.to)}));
+  let leafCount = 0;
+  (function count(id){
+    const kids = childrenOf(id);
+    if (kids.length === 0){ leafCount++; return; }
+    kids.forEach(k=>count(k.node.id));
+  })(start.id);
+  const width = leafCount * (NODE_W + H_GAP);
+
+  return { rootId: start.id, width };
+}
+
+// ---------- Tree layout: recursive, non-overlapping, branches spread left/right ----------
+// roots: array of {rootId, offsetX}: one entry per independent diagram (separated by --x--)
+function treeLayout(roots){
+  if (!roots){
+    // re-layout everything as a single existing root (used by "Auto layout" button)
+    roots = [{ rootId: nodes[0] ? nodes[0].id : null, offsetX: 0 }];
+  }
+  const NODE_W = 220, H_GAP = 70, V_GAP = 150;
+  const childrenOf = (id) => edges.filter(e=>e.from===id).map(e=>({node: nodes.find(n=>n.id===e.to), label: e.label}));
+
+  roots.forEach(({rootId, offsetX})=>{
+    if (!rootId) return;
+    let cursorX = offsetX;
+    function layout(id, depth){
+      const kids = childrenOf(id);
+      const n = nodes.find(x=>x.id===id);
+      if (!n) return;
+      n.y = depth * V_GAP;
+      if (kids.length === 0){
+        n.x = cursorX;
+        cursorX += NODE_W + H_GAP;
+        return;
+      }
+      kids.forEach(k => layout(k.node.id, depth+1));
+      const xs = kids.map(k=>k.node.x);
+      n.x = (Math.min(...xs) + Math.max(...xs)) / 2;
+    }
+    layout(rootId, 0);
+  });
+
+  const minX = Math.min(...nodes.map(n=>n.x));
+  nodes.forEach(n=>{
+    n.x = (n.x - minX) + 40;
+    n.y = n.y + 40;
+  });
+}
+
+// ---------- Rendering ----------
+const canvas = document.getElementById('canvas');
+const svg = document.getElementById('connectors');
+
+function render(){
+  document.querySelectorAll('.node').forEach(n=>n.remove());
+  document.querySelectorAll('.card').forEach(n=>n.remove());
+  nodes.forEach(n=>{
+    const el = document.createElement('div');
+    el.className = 'node ' + n.type;
+    el.style.left = n.x + 'px';
+    el.style.top = n.y + 'px';
+    el.dataset.id = n.id;
+    el.innerHTML = `<div class="editable" contenteditable="false">${escapeHtml(n.text)}</div><div class="del" title="delete">×</div>`;
+    canvas.appendChild(el);
+    n._el = el;
+    makeDraggable(el, n);
+
+    const editable = el.querySelector('.editable');
+    editable.addEventListener('dblclick', (e)=>{
+      e.stopPropagation();
+      editable.contentEditable = 'true';
+      editable.focus();
+      document.execCommand('selectAll', false, null);
+    });
+    editable.addEventListener('blur', ()=>{
+      editable.contentEditable = 'false';
+      n.text = editable.innerText.trim();
+    });
+    editable.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter'){ e.preventDefault(); editable.blur(); }
+    });
+
+    el.querySelector('.del').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      deleteNode(n.id);
+    });
+
+    el.addEventListener('mousedown', ()=>selectNode(n.id));
+  });
+  requestAnimationFrame(()=>{ drawConnectors(); drawCards(); });
+}
+
+function drawCards(){
+  const PAD = 26;
+  groups.forEach(g=>{
+    // gather all nodes reachable from rootId via edges (connected component)
+    const seen = new Set();
+    const stack = [g.rootId];
+    while(stack.length){
+      const id = stack.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      edges.forEach(e=>{
+        if (e.from===id && !seen.has(e.to)) stack.push(e.to);
+      });
+    }
+    const memberNodes = nodes.filter(n=>seen.has(n.id) && n._el);
+    if (memberNodes.length === 0) return;
+    let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+    memberNodes.forEach(n=>{
+      const w = n._el.offsetWidth, h = n._el.offsetHeight;
+      minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + w); maxY = Math.max(maxY, n.y + h);
+    });
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.left = (minX - PAD) + 'px';
+    card.style.top = (minY - PAD - 14) + 'px';
+    card.style.width = (maxX - minX + PAD*2) + 'px';
+    card.style.height = (maxY - minY + PAD*2 + 14) + 'px';
+    const title = document.createElement('div');
+    title.className = 'card-title';
+    title.textContent = g.title;
+    card.appendChild(title);
+    canvas.insertBefore(card, canvas.firstChild);
+  });
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function selectNode(id){
+  selectedId = id;
+  document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
+  const n = nodes.find(n=>n.id===id);
+  if (n && n._el) n._el.classList.add('selected');
+}
+
+function deleteNode(id){
+  nodes = nodes.filter(n=>n.id!==id);
+  edges = edges.filter(e=>e.from!==id && e.to!==id);
+  render();
+}
+
+function makeDraggable(el, n){
+  let dragging = false, offX=0, offY=0;
+  el.addEventListener('mousedown', (e)=>{
+    if (e.target.classList.contains('del')) return;
+    if (e.target.isContentEditable) return;
+    dragging = true;
+    const rect = el.getBoundingClientRect();
+    offX = e.clientX - rect.left;
+    offY = e.clientY - rect.top;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', (e)=>{
+    if (!dragging) return;
+    const wrap = document.getElementById('canvas-wrap');
+    const wrapRect = wrap.getBoundingClientRect();
+    let x = e.clientX - wrapRect.left + wrap.scrollLeft - offX;
+    let y = e.clientY - wrapRect.top + wrap.scrollTop - offY;
+    x = Math.max(0, x); y = Math.max(0, y);
+    n.x = x; n.y = y;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    drawConnectors();
+    drawCards();
+  });
+  document.addEventListener('mouseup', ()=>{ dragging = false; });
+}
+
+function nodeCenter(n, side){
+  const w = n._el ? n._el.offsetWidth : n.w;
+  const h = n._el ? n._el.offsetHeight : n.h;
+  if (side==='bottom') return {x:n.x + w/2, y:n.y + h};
+  if (side==='top') return {x:n.x + w/2, y:n.y};
+  if (side==='right') return {x:n.x + w, y:n.y + h/2};
+  if (side==='left') return {x:n.x, y:n.y + h/2};
+  return {x:n.x+w/2, y:n.y+h/2};
+}
+
+function drawConnectors(){
+  svg.setAttribute('width', canvas.offsetWidth);
+  svg.setAttribute('height', canvas.offsetHeight);
+  svg.innerHTML = `<defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#8a8f99"/>
+    </marker>
+  </defs>`;
+  edges.forEach(e=>{
+    const from = nodes.find(n=>n.id===e.from);
+    const to = nodes.find(n=>n.id===e.to);
+    if (!from || !to) return;
+    const p1 = nodeCenter(from, 'bottom');
+    const p2 = nodeCenter(to, 'top');
+    const midY = (p1.y+p2.y)/2;
+    const path = `M${p1.x},${p1.y} C${p1.x},${midY} ${p2.x},${midY} ${p2.x},${p2.y}`;
+    const pathEl = document.createElementNS('http://www.w3.org/2000/svg','path');
+    pathEl.setAttribute('d', path);
+    pathEl.setAttribute('stroke', '#8a8f99');
+    pathEl.setAttribute('stroke-width', '1.6');
+    pathEl.setAttribute('fill', 'none');
+    pathEl.setAttribute('marker-end', 'url(#arrow)');
+    svg.appendChild(pathEl);
+    if (e.label){
+      const lx = p1.x + (p2.x - p1.x) * 0.25;
+      const ly = p1.y + (p2.y - p1.y) * 0.25;
+      const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', lx); t.setAttribute('y', ly+4);
+      t.setAttribute('font-size','11.5'); t.setAttribute('font-weight','500');
+      t.setAttribute('fill', '#6b7078');
+      t.setAttribute('text-anchor','middle');
+      t.textContent = e.label;
+      bg.setAttribute('x', lx-14); bg.setAttribute('y', ly-9);
+      bg.setAttribute('width', 28); bg.setAttribute('height', 16);
+      bg.setAttribute('rx', 3);
+      bg.setAttribute('fill', '#fafafa');
+      svg.appendChild(bg);
+      svg.appendChild(t);
+    }
+  });
+}
+
+function setStatus(msg){ document.getElementById('status').textContent = msg; }
+
+// ---------- Save / load (browser localStorage) ----------
+const STORAGE_KEY = 'flowloom:autosave';
+
+function saveState(){
+  const data = {
+    nodes: nodes.map(n=>({id:n.id, type:n.type, text:n.text, x:n.x, y:n.y})),
+    edges,
+    groups,
+    idCounter,
+    codeInput: document.getElementById('codeInput').value
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return false;
+  try{
+    const data = JSON.parse(raw);
+    nodes = data.nodes || [];
+    edges = data.edges || [];
+    groups = data.groups || [];
+    idCounter = data.idCounter || 1;
+    if (data.codeInput) document.getElementById('codeInput').value = data.codeInput;
+    render();
+    return nodes.length > 0;
+  }catch(e){ return false; }
+}
+
+document.getElementById('saveBtn').addEventListener('click', ()=>{
+  saveState();
+  setStatus('Saved to this browser. It will reload automatically next time you open this file.');
+});
+
+// ---------- Toolbar actions ----------
+document.getElementById('parseBtn').addEventListener('click', ()=>{
+  parseCode(document.getElementById('codeInput').value);
+});
+
+document.getElementById('addNode').addEventListener('click', ()=>{
+  const n = newNode('process', 'New step', 100 + Math.random()*200, 100 + Math.random()*200);
+  nodes.push(n);
+  render();
+});
+
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  if (!confirm('Clear the canvas?')) return;
+  nodes = []; edges = [];
+  render();
+  setStatus('Cleared.');
+});
+
+document.getElementById('autoLayout').addEventListener('click', ()=>{
+  const startNodes = nodes.filter(n=>n.type==='start');
+  const NODE_W = 220, H_GAP = 70;
+  const childrenOf = (id) => edges.filter(e=>e.from===id).map(e=>({node: nodes.find(n=>n.id===e.to)}));
+  let offsetX = 0;
+  const roots = startNodes.map(sn=>{
+    let leafCount = 0;
+    (function count(id, seen){
+      if (seen.has(id)) return; seen.add(id);
+      const kids = childrenOf(id);
+      if (kids.length === 0){ leafCount++; return; }
+      kids.forEach(k=>count(k.node.id, seen));
+    })(sn.id, new Set());
+    const r = { rootId: sn.id, offsetX };
+    offsetX += Math.max(1,leafCount) * (NODE_W + H_GAP) + 220;
+    return r;
+  });
+  treeLayout(roots.length ? roots : undefined);
+  render();
+  setStatus('Re-arranged as branching tree(s).');
+});
+
+// ---------- Export to drawio XML ----------
+function exportDrawio(){
+  const shapeFor = (type)=>{
+    if (type==='decision') return 'rhombus;whiteSpace=wrap;html=1;fillColor=#fdeed4;strokeColor=#d99425;fontColor=#7a5310;';
+    if (type==='start' || type==='end') return 'rounded=1;arcSize=50;whiteSpace=wrap;html=1;fillColor=' + (type==='start'?'#dff3e6;strokeColor=#3fa15f;fontColor=#1f5c37;':'#fbe4e4;strokeColor=#d64545;fontColor=#7a2323;');
+    return 'rounded=1;whiteSpace=wrap;html=1;fillColor=#e6effe;strokeColor=#3d6bf0;fontColor=#1c3c8c;';
+  };
+  let cells = '';
+  nodes.forEach(n=>{
+    const w = n._el ? n._el.offsetWidth : 160;
+    const h = n._el ? n._el.offsetHeight : 60;
+    cells += `<mxCell id="${n.id}" value="${xmlEscape(n.text)}" style="${shapeFor(n.type)}" vertex="1" parent="1">
+      <mxGeometry x="${Math.round(n.x)}" y="${Math.round(n.y)}" width="${Math.round(w)}" height="${Math.round(h)}" as="geometry"/>
+    </mxCell>\n`;
+  });
+  edges.forEach((e,i)=>{
+    cells += `<mxCell id="edge${i}" value="${xmlEscape(e.label||'')}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="${e.from}" target="${e.to}">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>\n`;
+  });
+
+  const xml = `<mxfile host="app.diagrams.net">
+  <diagram name="Flowchart">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        ${cells}
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>`;
+  return xml;
+}
+
+function xmlEscape(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  if (nodes.length===0){ setStatus('Nothing to export. Parse or add nodes first.'); return; }
+  const xml = exportDrawio();
+  const blob = new Blob([xml], {type:'application/xml'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'flowchart.drawio';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setStatus('Exported flowchart.drawio. Open it in draw.io / diagrams.net.');
+});
+
+// ---------- Export to PNG (free tier) ----------
+document.getElementById('exportPngBtn').addEventListener('click', async ()=>{
+  if (nodes.length===0){ setStatus('Nothing to export. Parse or add nodes first.'); return; }
+  const PAD = 40;
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  nodes.forEach(n=>{
+    const w = n._el ? n._el.offsetWidth : 180, h = n._el ? n._el.offsetHeight : 60;
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + w); maxY = Math.max(maxY, n.y + h);
+  });
+  document.querySelectorAll('.card').forEach(c=>{
+    const l = parseFloat(c.style.left), t = parseFloat(c.style.top);
+    minX = Math.min(minX, l); minY = Math.min(minY, t);
+    maxX = Math.max(maxX, l + parseFloat(c.style.width)); maxY = Math.max(maxY, t + parseFloat(c.style.height));
+  });
+  minX -= PAD; minY -= PAD; maxX += PAD; maxY += PAD;
+  const width = maxX - minX, height = maxY - minY;
+
+  const clonedCanvas = canvas.cloneNode(true);
+  clonedCanvas.querySelectorAll('.del').forEach(d=>d.remove());
+  const wrapperSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  wrapperSvg.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  wrapperSvg.setAttribute('width', width);
+  wrapperSvg.setAttribute('height', height);
+  wrapperSvg.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`);
+  const bgRect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  bgRect.setAttribute('x', minX); bgRect.setAttribute('y', minY);
+  bgRect.setAttribute('width', width); bgRect.setAttribute('height', height);
+  bgRect.setAttribute('fill', '#fafafa');
+  wrapperSvg.appendChild(bgRect);
+  const fo = document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
+  fo.setAttribute('x', 0); fo.setAttribute('y', 0);
+  fo.setAttribute('width', canvas.offsetWidth); fo.setAttribute('height', canvas.offsetHeight);
+  const styleClone = document.createElement('style');
+  styleClone.textContent = document.querySelector('style').textContent;
+  const container = document.createElement('div');
+  container.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
+  container.appendChild(styleClone);
+  container.appendChild(clonedCanvas);
+  fo.appendChild(container);
+  wrapperSvg.appendChild(fo);
+
+  const svgString = new XMLSerializer().serializeToString(wrapperSvg);
+  const svgBlob = new Blob([svgString], {type:'image/svg+xml;charset=utf-8'});
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  const img = new Image();
+  img.onload = ()=>{
+    const scale = 2;
+    const c = document.createElement('canvas');
+    c.width = width * scale; c.height = height * scale;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0,0,c.width,c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(blob=>{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'flowchart.png';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(svgUrl);
+      setStatus('Downloaded flowchart.png.');
+    });
+  };
+  img.onerror = ()=>{ setStatus('PNG export failed, try again after the diagram finishes rendering.'); URL.revokeObjectURL(svgUrl); };
+  img.src = svgUrl;
+});
+
+// canvas click deselect
+document.getElementById('canvas-wrap').addEventListener('mousedown', (e)=>{
+  if (e.target.id === 'canvas-wrap' || e.target.id === 'canvas'){
+    selectedId = null;
+    document.querySelectorAll('.node').forEach(el=>el.classList.remove('selected'));
+  }
+});
+
+// initial load: restore saved state if present, else parse sample
+if (!loadState()){
+  parseCode(sample);
+}
+</script>
+</body>
+</html>
