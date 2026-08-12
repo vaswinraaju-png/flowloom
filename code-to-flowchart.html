@@ -141,6 +141,7 @@ function parseCode(fullCode){
   });
 
   treeLayout(roots);
+  connectEnds();
   render();
   renderExplanation(blocks);
   setStatus(`Parsed ${blocks.length} diagram${blocks.length>1?'s':''}, ${nodes.length} nodes, ${edges.length} connectors.`);
@@ -285,6 +286,34 @@ function treeLayout(roots){
   nodes.forEach(n=>{
     n.x = (n.x - minX) + 40;
     n.y = n.y + 40;
+  });
+}
+
+// ---------- Connect all end/return nodes per diagram into one shared End node ----------
+function connectEnds(){
+  const V_GAP = 150;
+  groups.forEach(g=>{
+    // find all nodes reachable from this group's root (connected component)
+    const seen = new Set();
+    const stack = [g.rootId];
+    while(stack.length){
+      const id = stack.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      edges.forEach(e=>{ if (e.from===id && !seen.has(e.to)) stack.push(e.to); });
+    }
+    // leaf end nodes: type 'end' with no outgoing edges
+    const hasOutgoing = new Set(edges.map(e=>e.from));
+    const leafEnds = nodes.filter(n=>seen.has(n.id) && n.type==='end' && !hasOutgoing.has(n.id));
+    if (leafEnds.length < 2) return; // nothing to converge
+
+    const maxY = Math.max(...leafEnds.map(n=>n.y));
+    const avgX = leafEnds.reduce((s,n)=>s+n.x,0) / leafEnds.length;
+    const shared = newNode('end', 'End', avgX, maxY + V_GAP);
+    nodes.push(shared);
+    leafEnds.forEach(n=>{
+      edges.push({from: n.id, to: shared.id, label:''});
+    });
   });
 }
 
