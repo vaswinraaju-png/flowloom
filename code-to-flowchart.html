@@ -484,7 +484,12 @@ function drawConnectors(){
     const p1 = nodeCenter(from, 'bottom');
     const p2 = nodeCenter(to, 'top');
     const midY = (p1.y+p2.y)/2;
-    const path = `M${p1.x},${p1.y} C${p1.x},${midY} ${p2.x},${midY} ${p2.x},${p2.y}`;
+    let path;
+    if (Math.abs(p1.x - p2.x) < 2){
+      path = `M${p1.x},${p1.y} L${p2.x},${p2.y}`;
+    } else {
+      path = `M${p1.x},${p1.y} L${p1.x},${midY} L${p2.x},${midY} L${p2.x},${p2.y}`;
+    }
     const pathEl = document.createElementNS('http://www.w3.org/2000/svg','path');
     pathEl.setAttribute('d', path);
     pathEl.setAttribute('stroke', '#8a8f99');
@@ -494,7 +499,7 @@ function drawConnectors(){
     svg.appendChild(pathEl);
     if (e.label){
       const lx = p1.x + (p2.x - p1.x) * 0.25;
-      const ly = p1.y + (p2.y - p1.y) * 0.25;
+      const ly = midY;
       const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
       const t = document.createElementNS('http://www.w3.org/2000/svg','text');
       t.setAttribute('x', lx); t.setAttribute('y', ly+4);
